@@ -1,0 +1,31 @@
+.DS_Store
+.AppleDouble
+.LSOverride
+.idea/
+.vscode/
+*.swp
+*~
+
+.venv/
+.python-version
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+.env
+.env.*
+!.env.example
+*.token
+*.pem
+
+# Private builds contain a recoverable Turso database token.
+private/
+
+# Override a possible global dist/ rule, then publish only safe generated files.
+!dist/
+dist/*
+!dist/Clipboard Snap.xml
+!dist/Clipboard Snap.shortcut

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Clipboard Snap Shortcut"
+  short_description: "Build Clipboard Snap and inspect Turso records"
+  default_prompt: "Use $clipboard-snap-shortcut to build and validate the iOS Shortcut, manage its scoped Turso setup, or retrieve saved clipboard records with the authenticated CLI."
