@@ -1,0 +1,5 @@
+* text=auto eol=lf
+
+*.shortcut binary
+csl/*.csl linguist-vendored
+dist/*.xml linguist-generated

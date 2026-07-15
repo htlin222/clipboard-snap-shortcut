@@ -26,9 +26,10 @@ parameter, preserving quotes, line breaks, emoji, and Unicode.
 
 ## Install
 
-Download [Clipboard Snap.shortcut](dist/Clipboard%20Snap.shortcut), transfer it
-to the iPhone with AirDrop or iCloud Drive, and open it in Shortcuts. During
-**Add Shortcut**, enter:
+Download the latest signed
+[Clipboard Snap Shortcut](https://github.com/htlin222/clipboard-snap-shortcut/releases/latest/download/Clipboard.Snap.shortcut),
+transfer it to the iPhone with AirDrop or iCloud Drive, and open it in
+Shortcuts. During **Add Shortcut**, enter:
 
 1. **Turso pipeline URL:** the database HTTP URL followed by `/v2/pipeline`.
 2. **Turso database token:** the raw token only, without `Bearer`.
