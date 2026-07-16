@@ -26,20 +26,22 @@ BLOCKED_MESSAGE = (
 )
 
 
-def load_sensitive_pattern(path: Path) -> str:
-    """Join config.toml's [[patterns]] regexes into one ICU alternation."""
+def to_icu(regex: str) -> str:
+    # `[[:space:]]`/`[^[:space:]]` are POSIX-class syntax written for
+    # grep -E; ICU supports it too, but `\s`/`\S` are the unambiguous forms
+    # on the Shortcuts side.
+    return regex.replace("[^[:space:]]", r"\S").replace("[[:space:]]", r"\s")
+
+
+def load_sensitive_config(path: Path) -> tuple[str, list[dict[str, Any]]]:
+    """Return (combined single-match ICU pattern, [[count_patterns]] list)."""
     with path.open("rb") as config_file:
         config = tomllib.load(config_file)
     patterns = config.get("patterns", [])
     if not patterns:
         raise SystemExit(f"no [[patterns]] entries found in {path}")
-    # `[[:space:]]`/`[^[:space:]]` are POSIX-class syntax written for
-    # grep -E; ICU supports it too, but `\s`/`\S` are the unambiguous forms
-    # on the Shortcuts side.
-    def to_icu(regex: str) -> str:
-        return regex.replace("[^[:space:]]", r"\S").replace("[[:space:]]", r"\s")
-
-    return "|".join(f"(?:{to_icu(entry['regex'])})" for entry in patterns)
+    combined = "|".join(f"(?:{to_icu(entry['regex'])})" for entry in patterns)
+    return combined, config.get("count_patterns", [])
 
 
 def stable_uuid(label: str) -> str:
@@ -193,13 +195,93 @@ def variable_condition_input(action_uuid: str, output_name: str) -> dict[str, An
     }
 
 
+def count_pattern_actions(entry: dict[str, Any], input_uuid: str) -> list[dict[str, Any]]:
+    """Block sending when a config.toml [[count_patterns]] entry's ICU regex
+    matches at least `min_count` times (e.g. a pasted column of chart numbers,
+    none of which looks sensitive on its own)."""
+    name = entry["name"]
+    min_count = int(entry["min_count"])
+    match_uuid = stable_uuid(f"count-match-{name}")
+    count_uuid = stable_uuid(f"count-count-{name}")
+    group_uuid = stable_uuid(f"count-condition-{name}")
+    matches_output = f"{name} Matches"
+    count_output = f"{name} Count"
+    blocked_message = (
+        f"Blocked: this text contains {min_count} or more '{name}'-shaped "
+        "values (config.toml) and was not sent to Turso."
+    )
+    return [
+        action(
+            "is.workflow.actions.comment",
+            {
+                "WFCommentActionText": (
+                    f"Block sending if config.toml's '{name}' rule finds "
+                    f"{min_count}+ matches (bulk paste of otherwise-unremarkable values)."
+                )
+            },
+        ),
+        action(
+            "is.workflow.actions.text.match",
+            {
+                "UUID": match_uuid,
+                "CustomOutputName": matches_output,
+                "WFMatchTextCaseSensitive": False,
+                "WFMatchTextPattern": token_string(entry["icu_regex"]),
+                "text": token_attachment(input_uuid, "Text"),
+            },
+        ),
+        action(
+            "is.workflow.actions.count",
+            {
+                "UUID": count_uuid,
+                "CustomOutputName": count_output,
+                "WFCountType": "Items",
+                "Input": token_attachment(match_uuid, matches_output),
+            },
+        ),
+        action(
+            "is.workflow.actions.conditional",
+            {
+                "GroupingIdentifier": group_uuid,
+                "WFCondition": 3,
+                "WFNumberValue": str(min_count),
+                "WFControlFlowMode": 0,
+                "WFInput": variable_condition_input(count_uuid, count_output),
+            },
+        ),
+        action(
+            "is.workflow.actions.showresult",
+            {"Text": token_string(blocked_message)},
+        ),
+        action(
+            "is.workflow.actions.exit",
+            {},
+        ),
+        action(
+            "is.workflow.actions.conditional",
+            {
+                "GroupingIdentifier": group_uuid,
+                "WFControlFlowMode": 1,
+            },
+        ),
+        action(
+            "is.workflow.actions.conditional",
+            {
+                "GroupingIdentifier": group_uuid,
+                "UUID": stable_uuid(f"end-count-condition-{name}"),
+                "WFControlFlowMode": 2,
+            },
+        ),
+    ]
+
+
 def build_shortcut(
     name: str,
     endpoint: str = DEFAULT_ENDPOINT,
     token: str = TOKEN_PLACEHOLDER,
     patterns_file: Path = DEFAULT_PATTERNS_FILE,
 ) -> dict[str, Any]:
-    sensitive_pattern = load_sensitive_pattern(patterns_file)
+    sensitive_pattern, count_patterns = load_sensitive_config(patterns_file)
     credential_note = (
         "The Turso endpoint and insert-only database token are requested "
         "during import. Keep the configured shortcut private."
@@ -340,6 +422,11 @@ def build_shortcut(
                 "WFControlFlowMode": 2,
             },
         ),
+        *[
+            block_action
+            for entry in count_patterns
+            for block_action in count_pattern_actions(entry, input_uuid)
+        ],
         action(
             "is.workflow.actions.comment",
             {

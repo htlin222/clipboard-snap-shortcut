@@ -301,12 +301,23 @@ that both delivery paths check before anything reaches Turso:
   through a native **Match Text** action before the Base64/network step. A
   match shows a "Blocked" result and stops the Shortcut instead of sending.
 
+`config.toml` also has a second table, `[[count_patterns]]`, for values that
+aren't sensitive individually but are as a batch — e.g. `bulk-8digit-numbers`
+blocks a paste containing 3+ separate 8-digit chart numbers (a spreadsheet
+column, a batch lookup list), even though no single 8-digit number matches
+anything on its own. Neither engine's plain regex match can express "count
+of matches ≥ N" directly, so each entry carries the rule twice: `grep -oE`
+extraction + `grep -E` length filter + a shell count for the relay, and an
+ICU `\b...\b`-bounded Match Text + a native **Count** action + a numeric
+**If** (≥) for the Shortcut.
+
 Because the Shortcut-side check is baked in rather than read at runtime,
 editing `config.toml` requires rebuilding and re-importing the Shortcut
 (`make shortcut`, then reinstall on the iPhone) for the change to take
 effect there — the Mac-side relay picks up edits immediately on its next
-run. Add new patterns by copying a `[[patterns]]` block in `config.toml`;
-see the comments there for the ERE-portability rules the regex must follow.
+run. Add new single-match patterns by copying a `[[patterns]]` block, or new
+threshold rules by copying a `[[count_patterns]]` block; see the comments in
+`config.toml` for the ERE-portability rules the regex must follow.
 
 Test any new or edited pattern before trusting it: run `make validate` (it
 rebuilds and checks the plist), and do one on-device test run of the

@@ -42,8 +42,10 @@ if [[ -f "$CONFIG" ]]; then
     pattern_names+=("$pname")
     pattern_regexes+=("$pregex")
   done < <(awk -f - "$CONFIG" <<'AWK_EOF'
-BEGIN { name = "unnamed" }
-/^[[:space:]]*\[\[patterns\]\]/ { name = "unnamed" }
+BEGIN { name = "unnamed"; intable = 0 }
+/^[[:space:]]*\[\[patterns\]\]/ { name = "unnamed"; intable = 1; next }
+/^[[:space:]]*\[\[count_patterns\]\]/ { intable = 0; next }
+!intable { next }
 /^[[:space:]]*name[[:space:]]*=/ {
   line = $0
   sub(/^[^=]*=[[:space:]]*/, "", line)
@@ -75,6 +77,71 @@ is_sensitive() {
   return 1
 }
 
+# Load the [[count_patterns]] table into four parallel arrays.
+count_names=()
+count_token_regexes=()
+count_match_regexes=()
+count_min_counts=()
+if [[ -f "$CONFIG" ]]; then
+  while IFS=$'\t' read -r cname ctoken cmatch cmin; do
+    [[ -z "$cname" ]] && continue
+    count_names+=("$cname")
+    count_token_regexes+=("$ctoken")
+    count_match_regexes+=("$cmatch")
+    count_min_counts+=("$cmin")
+  done < <(awk -f - "$CONFIG" <<'AWK_EOF'
+function flush() {
+  if (name != "") print name "\t" token_regex "\t" match_regex "\t" min_count
+  name = ""; token_regex = ""; match_regex = ""; min_count = ""
+}
+BEGIN { name = ""; intable = 0 }
+/^[[:space:]]*\[\[count_patterns\]\]/ { flush(); intable = 1; next }
+/^[[:space:]]*\[\[patterns\]\]/ { flush(); intable = 0; next }
+!intable { next }
+/^[[:space:]]*name[[:space:]]*=/ {
+  line = $0
+  sub(/^[^=]*=[[:space:]]*/, "", line)
+  gsub(/^"/, "", line)
+  gsub(/"[[:space:]]*$/, "", line)
+  name = line
+}
+/^[[:space:]]*shell_token_regex[[:space:]]*=/ {
+  line = $0
+  sub(/^[^=]*=[[:space:]]*/, "", line)
+  gsub(/^'/, "", line)
+  gsub(/'[[:space:]]*$/, "", line)
+  token_regex = line
+}
+/^[[:space:]]*shell_match_regex[[:space:]]*=/ {
+  line = $0
+  sub(/^[^=]*=[[:space:]]*/, "", line)
+  gsub(/^'/, "", line)
+  gsub(/'[[:space:]]*$/, "", line)
+  match_regex = line
+}
+/^[[:space:]]*min_count[[:space:]]*=/ {
+  line = $0
+  sub(/^[^=]*=[[:space:]]*/, "", line)
+  gsub(/[[:space:]]*$/, "", line)
+  min_count = line
+}
+END { flush() }
+AWK_EOF
+  )
+fi
+
+is_bulk_sensitive() {
+  local text="$1" i count
+  for (( i = 1; i <= ${#count_names[@]}; i++ )); do
+    count=$(print -r -- "$text" | grep -oE -- "${count_token_regexes[$i]}" | grep -cE -- "${count_match_regexes[$i]}" || true)
+    if (( count >= count_min_counts[i] )); then
+      matched_pattern_name="${count_names[$i]} (${count}x)"
+      return 0
+    fi
+  done
+  return 1
+}
+
 TOKEN=$(security find-generic-password -a "$USER" -s "$KEYCHAIN_SERVICE" -w)
 
 mkdir -p "${STATE:h}"
@@ -100,7 +167,8 @@ while IFS='|' read -r pk hex_value; do
   fi
 
   text=$(print -r -- "$hex_value" | xxd -r -p)
-  if (( ${#pattern_regexes[@]} > 0 )) && is_sensitive "$text"; then
+  if { (( ${#pattern_regexes[@]} > 0 )) && is_sensitive "$text"; } \
+    || { (( ${#count_names[@]} > 0 )) && is_bulk_sensitive "$text"; }; then
     print "skipped item $pk: matched sensitive pattern '$matched_pattern_name'"
     skipped=$((skipped + 1))
     cursor=$pk

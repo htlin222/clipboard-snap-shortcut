@@ -7,9 +7,12 @@ import argparse
 import json
 import plistlib
 import re
+import tomllib
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlsplit
+
+PATTERNS_FILE = Path(__file__).resolve().parents[3] / "config.toml"
 
 
 EXPECTED_ACTIONS = [
@@ -22,6 +25,14 @@ EXPECTED_ACTIONS = [
     "is.workflow.actions.conditional",
     "is.workflow.actions.comment",
     "is.workflow.actions.text.match",
+    "is.workflow.actions.conditional",
+    "is.workflow.actions.showresult",
+    "is.workflow.actions.exit",
+    "is.workflow.actions.conditional",
+    "is.workflow.actions.conditional",
+    "is.workflow.actions.comment",
+    "is.workflow.actions.text.match",
+    "is.workflow.actions.count",
     "is.workflow.actions.conditional",
     "is.workflow.actions.showresult",
     "is.workflow.actions.exit",
@@ -197,6 +208,56 @@ def validate(
     if actions[11]["WFWorkflowActionParameters"] != {}:
         fail("Exit Shortcut after a sensitive match must take no parameters")
 
+    with PATTERNS_FILE.open("rb") as config_file:
+        count_patterns = tomllib.load(config_file).get("count_patterns", [])
+    if len(count_patterns) != 1:
+        fail(
+            "this validator's fixed action indices assume exactly one "
+            "[[count_patterns]] entry in config.toml; update EXPECTED_ACTIONS "
+            "and the indices below if that count changed"
+        )
+    count_entry = count_patterns[0]
+
+    count_match_action = actions[15]["WFWorkflowActionParameters"]
+    if count_match_action.get("WFMatchTextCaseSensitive") is not False:
+        fail("bulk-count match must be case-insensitive")
+    if decode_token_string(
+        count_match_action.get("WFMatchTextPattern", {})
+    ) != count_entry["icu_regex"]:
+        fail("bulk-count match pattern differs from config.toml's icu_regex")
+    if count_match_action.get("text") != {
+        "Value": {
+            "OutputName": "Text",
+            "OutputUUID": actions[4]["WFWorkflowActionParameters"]["UUID"],
+            "Type": "ActionOutput",
+        },
+        "WFSerializationType": "WFTextTokenAttachment",
+    }:
+        fail("bulk-count match must scan the saved text")
+
+    count_action = actions[16]["WFWorkflowActionParameters"]
+    if count_action.get("WFCountType") != "Items":
+        fail("bulk-count action must count Items")
+    if count_action.get("Input", {}).get("Value", {}).get(
+        "OutputUUID"
+    ) != count_match_action["UUID"]:
+        fail("bulk-count action must count the Match Text output")
+
+    count_condition = actions[17]["WFWorkflowActionParameters"]
+    if count_condition.get("WFCondition") != 3:
+        fail("bulk-count check must use 'is greater than or equal to'")
+    if count_condition.get("WFNumberValue") != str(count_entry["min_count"]):
+        fail("bulk-count threshold differs from config.toml's min_count")
+    if count_condition.get("WFInput", {}).get("Variable", {}).get(
+        "Value", {}
+    ).get("OutputUUID") != count_action["UUID"]:
+        fail("bulk-count check must read the Count action's output")
+
+    if not decode_token_string(actions[18]["WFWorkflowActionParameters"]["Text"]):
+        fail("bulk-count blocked-send message must not be empty")
+    if actions[19]["WFWorkflowActionParameters"] != {}:
+        fail("Exit Shortcut after a bulk-count match must take no parameters")
+
     request_action = next(
         action
         for action in actions
@@ -226,7 +287,7 @@ def validate(
     if base64_parameters.get("WFBase64LineBreakMode") != "None":
         fail("Base64 output must not contain line breaks")
 
-    body_action = actions[16]["WFWorkflowActionParameters"]
+    body_action = actions[24]["WFWorkflowActionParameters"]
     body_text = decode_token_string(body_action["WFTextActionText"])
     try:
         payload = json.loads(body_text.replace("<dynamic>", "VHVyc28="))
@@ -262,7 +323,7 @@ def validate(
     if request_url != expected_request_url:
         fail("request URL differs from the configured credential mode")
 
-    split_action = actions[25]["WFWorkflowActionParameters"]
+    split_action = actions[33]["WFWorkflowActionParameters"]
     expected_text_input = {
         "Value": {
             "OutputName": "Text",
@@ -278,7 +339,7 @@ def validate(
     if "WFInput" in split_action:
         fail("Split Text must not include the legacy WFInput parameter")
 
-    first_line_action = actions[26]["WFWorkflowActionParameters"]
+    first_line_action = actions[34]["WFWorkflowActionParameters"]
     if first_line_action.get("WFItemSpecifier") != "First Item":
         fail("notification preview must select the first text line")
     if first_line_action.get("WFInput", {}).get("Value", {}).get(
@@ -286,7 +347,7 @@ def validate(
     ) != split_action.get("UUID"):
         fail("first-line action must use the Split Text output")
 
-    notification = actions[27]["WFWorkflowActionParameters"]
+    notification = actions[35]["WFWorkflowActionParameters"]
     if notification.get("WFNotificationActionTitle") != "Text saved to Turso.":
         fail("success notification title differs from the contract")
     if decode_token_string(notification["WFNotificationActionBody"]) != "<dynamic>...":

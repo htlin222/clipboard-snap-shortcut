@@ -149,7 +149,7 @@ The Turso endpoint and insert-only database token are requested during import. K
 						<key>attachmentsByRange</key>
 						<dict/>
 						<key>string</key>
-						<string>(?:REDACTED\.org)|(?:(httpOnly|sameSite|hostOnly|storeId|expirationDate)"\s*:)|(?:eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+)|(?:(session|token|secret|password|passwd|api[_-]?key|apikey)"?\s*[:=]\s*\S+)|(?:(username|login)\s*,\s*password|password\s*,\s*(username|login|url))|(?:[a-f0-9]{40,})|(?:REDACTED|REDACTED)|(?:-----BEGIN (RSA |OPENSSH |EC |DSA |ENCRYPTED )?PRIVATE KEY-----)|(?:AKIA[0-9A-Z]{16})|(?:aws_secret_access_key\s*[:=]\s*\S+)|(?:AIza[0-9A-Za-z_-]{35})|(?:xox[baprs]-[0-9A-Za-z-]{10,})|(?:gh[pousr]_[A-Za-z0-9]{36,})|(?:(4[0-9]{3}|5[1-5][0-9]{2}|6011|65[0-9]{2})[ -]?[0-9]{4}[ -]?[0-9]{4}[ -]?[0-9]{4})|(?:3[47][0-9]{2}[ -]?[0-9]{6}[ -]?[0-9]{5})|(?:(seed phrase|recovery phrase|secret recovery phrase|mnemonic))</string>
+						<string>(?:REDACTED\.org)|(?:(httpOnly|sameSite|hostOnly|storeId|expirationDate)"\s*:)|(?:eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+)|(?:(session|token|secret|password|passwd|api[_-]?key|apikey)"?\s*[:=]\s*\S+)|(?:(username|login)\s*,\s*password|password\s*,\s*(username|login|url))|(?:[a-f0-9]{40,})|(?:REDACTED|REDACTED)|(?:-----BEGIN (RSA |OPENSSH |EC |DSA |ENCRYPTED )?PRIVATE KEY-----)|(?:AKIA[0-9A-Z]{16})|(?:aws_secret_access_key\s*[:=]\s*\S+)|(?:AIza[0-9A-Za-z_-]{35})|(?:xox[baprs]-[0-9A-Za-z-]{10,})|(?:gh[pousr]_[A-Za-z0-9]{36,})|(?:(^|[^0-9])(4[0-9]{3}|5[1-5][0-9]{2}|6011|65[0-9]{2})[ -]?[0-9]{4}[ -]?[0-9]{4}[ -]?[0-9]{4}([^0-9]|$))|(?:(^|[^0-9])3[47][0-9]{2}[ -]?[0-9]{6}[ -]?[0-9]{5}([^0-9]|$))|(?:(seed phrase|recovery phrase|secret recovery phrase|mnemonic))</string>
 					</dict>
 					<key>WFSerializationType</key>
 					<string>WFTextTokenString</string>
@@ -247,6 +247,164 @@ The Turso endpoint and insert-only database token are requested during import. K
 				<string>1D27FBDE-60B2-5381-B7CB-27C81484D61D</string>
 				<key>UUID</key>
 				<string>E761279F-2F28-5143-8106-43FB96A9B10B</string>
+				<key>WFControlFlowMode</key>
+				<integer>2</integer>
+			</dict>
+		</dict>
+		<dict>
+			<key>WFWorkflowActionIdentifier</key>
+			<string>is.workflow.actions.comment</string>
+			<key>WFWorkflowActionParameters</key>
+			<dict>
+				<key>WFCommentActionText</key>
+				<string>Block sending if config.toml's 'bulk-8digit-numbers' rule finds 3+ matches (bulk paste of otherwise-unremarkable values).</string>
+			</dict>
+		</dict>
+		<dict>
+			<key>WFWorkflowActionIdentifier</key>
+			<string>is.workflow.actions.text.match</string>
+			<key>WFWorkflowActionParameters</key>
+			<dict>
+				<key>UUID</key>
+				<string>0AE45609-6AED-528C-AAFB-3C3940871E95</string>
+				<key>CustomOutputName</key>
+				<string>bulk-8digit-numbers Matches</string>
+				<key>WFMatchTextCaseSensitive</key>
+				<false/>
+				<key>WFMatchTextPattern</key>
+				<dict>
+					<key>Value</key>
+					<dict>
+						<key>attachmentsByRange</key>
+						<dict/>
+						<key>string</key>
+						<string>\b[0-9]{8}\b</string>
+					</dict>
+					<key>WFSerializationType</key>
+					<string>WFTextTokenString</string>
+				</dict>
+				<key>text</key>
+				<dict>
+					<key>Value</key>
+					<dict>
+						<key>OutputName</key>
+						<string>Text</string>
+						<key>OutputUUID</key>
+						<string>42F99692-A66A-54E9-A975-D71F4E04A847</string>
+						<key>Type</key>
+						<string>ActionOutput</string>
+					</dict>
+					<key>WFSerializationType</key>
+					<string>WFTextTokenAttachment</string>
+				</dict>
+			</dict>
+		</dict>
+		<dict>
+			<key>WFWorkflowActionIdentifier</key>
+			<string>is.workflow.actions.count</string>
+			<key>WFWorkflowActionParameters</key>
+			<dict>
+				<key>UUID</key>
+				<string>58B5E349-FD3C-58DB-AF1C-56060AB1696A</string>
+				<key>CustomOutputName</key>
+				<string>bulk-8digit-numbers Count</string>
+				<key>WFCountType</key>
+				<string>Items</string>
+				<key>Input</key>
+				<dict>
+					<key>Value</key>
+					<dict>
+						<key>OutputName</key>
+						<string>bulk-8digit-numbers Matches</string>
+						<key>OutputUUID</key>
+						<string>0AE45609-6AED-528C-AAFB-3C3940871E95</string>
+						<key>Type</key>
+						<string>ActionOutput</string>
+					</dict>
+					<key>WFSerializationType</key>
+					<string>WFTextTokenAttachment</string>
+				</dict>
+			</dict>
+		</dict>
+		<dict>
+			<key>WFWorkflowActionIdentifier</key>
+			<string>is.workflow.actions.conditional</string>
+			<key>WFWorkflowActionParameters</key>
+			<dict>
+				<key>GroupingIdentifier</key>
+				<string>EE1E82B1-DE08-5203-9117-168B7CC6EC48</string>
+				<key>WFCondition</key>
+				<integer>3</integer>
+				<key>WFNumberValue</key>
+				<string>3</string>
+				<key>WFControlFlowMode</key>
+				<integer>0</integer>
+				<key>WFInput</key>
+				<dict>
+					<key>Type</key>
+					<string>Variable</string>
+					<key>Variable</key>
+					<dict>
+						<key>Value</key>
+						<dict>
+							<key>OutputName</key>
+							<string>bulk-8digit-numbers Count</string>
+							<key>OutputUUID</key>
+							<string>58B5E349-FD3C-58DB-AF1C-56060AB1696A</string>
+							<key>Type</key>
+							<string>ActionOutput</string>
+						</dict>
+						<key>WFSerializationType</key>
+						<string>WFTextTokenAttachment</string>
+					</dict>
+				</dict>
+			</dict>
+		</dict>
+		<dict>
+			<key>WFWorkflowActionIdentifier</key>
+			<string>is.workflow.actions.showresult</string>
+			<key>WFWorkflowActionParameters</key>
+			<dict>
+				<key>Text</key>
+				<dict>
+					<key>Value</key>
+					<dict>
+						<key>attachmentsByRange</key>
+						<dict/>
+						<key>string</key>
+						<string>Blocked: this text contains 3 or more 'bulk-8digit-numbers'-shaped values (config.toml) and was not sent to Turso.</string>
+					</dict>
+					<key>WFSerializationType</key>
+					<string>WFTextTokenString</string>
+				</dict>
+			</dict>
+		</dict>
+		<dict>
+			<key>WFWorkflowActionIdentifier</key>
+			<string>is.workflow.actions.exit</string>
+			<key>WFWorkflowActionParameters</key>
+			<dict/>
+		</dict>
+		<dict>
+			<key>WFWorkflowActionIdentifier</key>
+			<string>is.workflow.actions.conditional</string>
+			<key>WFWorkflowActionParameters</key>
+			<dict>
+				<key>GroupingIdentifier</key>
+				<string>EE1E82B1-DE08-5203-9117-168B7CC6EC48</string>
+				<key>WFControlFlowMode</key>
+				<integer>1</integer>
+			</dict>
+		</dict>
+		<dict>
+			<key>WFWorkflowActionIdentifier</key>
+			<string>is.workflow.actions.conditional</string>
+			<key>WFWorkflowActionParameters</key>
+			<dict>
+				<key>GroupingIdentifier</key>
+				<string>EE1E82B1-DE08-5203-9117-168B7CC6EC48</string>
+				<key>UUID</key>
+				<string>B95E4237-093B-522E-9EF5-DDCC373515F2</string>
 				<key>WFControlFlowMode</key>
 				<integer>2</integer>
 			</dict>

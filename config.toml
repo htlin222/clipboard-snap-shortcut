@@ -22,6 +22,19 @@
 #
 # To add a new pattern, copy a `[[patterns]]` block and edit `name`/`regex`.
 # To disable one without deleting it, comment out its `regex` line with `#`.
+#
+# [[count_patterns]] is a different shape: it blocks on *how many* matching
+# tokens appear, not on any single match (e.g. pasting a whole column of
+# chart numbers, none of which individually looks like a secret). It needs
+# three fields instead of one `regex`, because neither consumer engine has
+# a portable single-expression way to say "count exactly-N-digit tokens":
+#   name             = "short-id"
+#   min_count        = 3            # block when matches >= this
+#   shell_token_regex = 'raw ERE'   # grep -oE: candidate tokens to extract
+#   shell_match_regex = 'raw ERE'   # grep -E:  which extracted tokens count
+#   icu_regex         = 'raw ICU'   # Shortcut Match Text: same rule, but
+#                                   # ICU has real \b word boundaries so it
+#                                   # doesn't need the extract+filter split.
 
 [[patterns]]
 name = "REDACTED-hospital-domain"
@@ -85,13 +98,20 @@ regex = 'gh[pousr]_[A-Za-z0-9]{36,}'
 name = "credit-card-16digit"
 # Visa (4), Mastercard (51-55), Discover (6011, 65xx), 16 digits total,
 # grouped by 4 with an optional space or dash between every group
-# (covers both raw "4111111111111111" and "4111 1111 1111 1111").
-regex = '(4[0-9]{3}|5[1-5][0-9]{2}|6011|65[0-9]{2})[ -]?[0-9]{4}[ -]?[0-9]{4}[ -]?[0-9]{4}'
+# (covers both raw "4111111111111111" and "4111 1111 1111 1111"). The
+# leading/trailing `(^|[^0-9])`/`([^0-9]|$)` matter: without them this
+# matches unbounded, so an unrelated 20+ digit run (an account number, a
+# sliced-up phone/order ID) can contain a "starts with 4, 16 digits long"
+# substring purely by chance and false-trigger. POSIX ERE has no `\b`, so
+# this is the portable stand-in — it works the same way in the ICU regex
+# on the Shortcut side.
+regex = '(^|[^0-9])(4[0-9]{3}|5[1-5][0-9]{2}|6011|65[0-9]{2})[ -]?[0-9]{4}[ -]?[0-9]{4}[ -]?[0-9]{4}([^0-9]|$)'
 
 [[patterns]]
 name = "credit-card-amex"
 # Amex: prefix 34/37, 15 digits total, conventionally grouped 4-6-5.
-regex = '3[47][0-9]{2}[ -]?[0-9]{6}[ -]?[0-9]{5}'
+# Bounded for the same reason as credit-card-16digit above.
+regex = '(^|[^0-9])3[47][0-9]{2}[ -]?[0-9]{6}[ -]?[0-9]{5}([^0-9]|$)'
 
 [[patterns]]
 name = "crypto-wallet-phrase-label"
@@ -103,3 +123,16 @@ name = "crypto-wallet-phrase-label"
 # If you want that stricter (noisier) net anyway, add e.g.:
 #   regex = '^([a-z]+[[:space:]]){11}[a-z]+$'   # exactly 12 words
 regex = '(seed phrase|recovery phrase|secret recovery phrase|mnemonic)'
+
+[[count_patterns]]
+name = "bulk-8digit-numbers"
+# A chart number alone doesn't look like anything (it's just 8 digits),
+# but pasting a whole column of them — a spreadsheet export, a batch
+# lookup list — is itself a leak. `shell_token_regex` extracts every
+# maximal run of digits; `shell_match_regex` keeps only the ones that are
+# exactly 8 digits long, so a single long number (a 16-digit card, a
+# 24-digit account number) can't get sliced into fake 8-digit "hits".
+min_count = 3
+shell_token_regex = '[0-9]+'
+shell_match_regex = '^[0-9]{8}$'
+icu_regex = '\b[0-9]{8}\b'
