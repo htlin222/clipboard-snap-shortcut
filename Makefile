@@ -10,6 +10,7 @@ NAME ?= Clipboard Snap
 ENDPOINT ?= https://DATABASE-ORG.turso.io/v2/pipeline
 TOKEN_EXPIRATION ?= 90d
 ID ?=
+MAC_SOURCE ?= maccy-$(shell hostname -s)
 
 DIST_DIR := dist
 PRIVATE_DIR := private
@@ -22,7 +23,8 @@ SCRIPTS := $(SKILL_DIR)/scripts
 SCHEMA := $(SKILL_DIR)/assets/schema.sql
 
 .PHONY: help sync build validate lint check ci shortcut open clean \
-	db db-url db-token db-verify db-latest db-record configured-shortcut
+	db db-url db-token db-verify db-latest db-record configured-shortcut \
+	mac-token mac-push
 
 help: ## Show available commands.
 	@awk 'BEGIN {FS = ":.*## "} /^[a-zA-Z0-9_-]+:.*## / {printf "  %-22s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -106,6 +108,17 @@ db-record: ## Show one complete record; usage: make db-record ID=123.
 	fi
 	"$(TURSO)" db shell "$(DB)" \
 		"SELECT id, created_at, source, text FROM clips WHERE id = $(ID);"
+
+mac-token: ## Mint a per-Mac insert-only token and store it in Keychain (never a file).
+	TOKEN=$$("$(TURSO)" db tokens create "$(DB)" -p clips:data_add --expiration "$(TOKEN_EXPIRATION)")
+	security add-generic-password -a "$$USER" -s "clipboard-snap-$(MAC_SOURCE)" -w "$$TOKEN" -U
+	print "Stored in Keychain service: clipboard-snap-$(MAC_SOURCE)"
+
+mac-push: ## Push new plain-text Maccy clips into the shared clips table.
+	scripts/push_maccy_clips.sh \
+		--endpoint "$$($(TURSO) db show $(DB) --http-url)/v2/pipeline" \
+		--keychain-service "clipboard-snap-$(MAC_SOURCE)" \
+		--source "$(MAC_SOURCE)"
 
 clean: ## Remove public generated artifacts and local Python caches.
 	rm -f "$(XML)" "$(SHORTCUT)"

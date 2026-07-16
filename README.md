@@ -149,6 +149,105 @@ cp .env.example .env
 set -a; source .env; set +a
 ```
 
+## Mac-to-Mac Merge via Maccy
+
+Two or more Macs running [Maccy](https://github.com/p0deje/Maccy) can push their
+plain-text clipboard history into the same shared `clips` table, so `db-verify`
+/ `db-latest` show one merged timeline across the iPhone and every Mac
+(distinguished by `source`).
+
+Maccy's history lives in a Core Data SQLite store at:
+
+```
+~/Library/Containers/org.p0deje.Maccy/Data/Library/Application Support/Maccy/Storage.sqlite
+```
+
+This is a one-way push, same as the iPhone Shortcut: it reads Maccy's local
+store and inserts new plain-text items (`public.utf8-plain-text`) into Turso.
+It never writes back into Maccy's own database — that store is Core Data's
+private format and is not safe to write into from an external script.
+
+### 1. Mint a per-Mac token (Keychain only, never a file)
+
+```bash
+make mac-token DB=clipboard-snap
+```
+
+This stores a fresh 90-day `clips:data_add` token in the login Keychain under
+service `clipboard-snap-<MAC_SOURCE>` (default `MAC_SOURCE` is
+`maccy-$(hostname -s)`). Run this once per Mac.
+
+### 2. Push once
+
+```bash
+make mac-push DB=clipboard-snap
+```
+
+`scripts/push_maccy_clips.sh` tracks its own cursor per source under
+`~/.local/state/clipboard-snap/`, so re-running only pushes items newer than
+the last push. On a Mac with existing Maccy history, the first run pushes
+everything currently in Maccy — check `make db-verify` if you want to see what
+went out before setting up automatic pushes on a Mac with a long clipboard
+history.
+
+### 3. Grant Full Disk Access
+
+Maccy's `Storage.sqlite` lives inside Maccy's own sandboxed container, so
+reading it from an external process is gated by macOS's privacy protection
+(TCC). When launchd runs `scripts/push_maccy_clips.sh`, the process macOS
+holds responsible is the script's interpreter — `/bin/zsh`, since that is
+literally what `ProgramArguments[0]` is — not `sqlite3`, even though
+`sqlite3` is the one calling `open()`. Without this grant every run fails
+with `sqlite3: ... authorization denied`.
+
+Add **`/bin/zsh`** to **System Settings → Privacy & Security → Full Disk
+Access**. This is broader than granting a single dedicated binary — every
+zsh script on the Mac, run by anything, silently gets the same unprompted
+disk access once this is set, not just this one. That's a real widening of
+this Mac's attack surface, so treat it as a deliberate choice, not a
+rubber-stamp step. The upside: `/bin/zsh` is a fixed system path, so unlike
+a Homebrew-installed interpreter this grant does not need to be redone after
+package upgrades.
+
+### 4. Automate with launchd
+
+The agent polls every 60 seconds (`StartInterval`), but the script itself
+checks `pgrep -x Maccy` first and exits immediately, before touching the
+network, if Maccy is not running. In practice this means it only ever does
+work while Maccy is open.
+
+`WatchPaths` (event-driven on `Storage.sqlite-wal` changes, so it would only
+wake up on an actual copy instead of polling) was tried first but did not
+reliably re-fire after the first change in testing — a known launchd
+quirk — so this falls back to a short interval instead.
+
+The shipped plist bakes in this Mac's endpoint, home path, Keychain service
+name, and `--source` value. On a second Mac, copy it and hand-edit those
+`<string>` values (home path, `clipboard-snap-maccy-<hostname>`,
+`maccy-<hostname>`) to match that Mac before loading it:
+
+```bash
+command cp launchd/com.htlin.clipboard-snap.mac-push.plist \
+  ~/Library/LaunchAgents/com.htlin.clipboard-snap.mac-push.plist
+# edit ~/Library/LaunchAgents/com.htlin.clipboard-snap.mac-push.plist, then:
+launchctl load ~/Library/LaunchAgents/com.htlin.clipboard-snap.mac-push.plist
+```
+
+Logs land in `/tmp/clipboard-snap-mac-push.log` / `.err`. To stop it:
+
+```bash
+launchctl unload ~/Library/LaunchAgents/com.htlin.clipboard-snap.mac-push.plist
+```
+
+### Reading the merged list
+
+Use the existing authenticated-CLI targets — `source` already tells iPhone and
+Mac rows apart:
+
+```bash
+make db-verify DB=clipboard-snap
+```
+
 ## Use
 
 For selected text:

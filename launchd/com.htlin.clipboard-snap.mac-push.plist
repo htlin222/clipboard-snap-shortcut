@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.htlin.clipboard-snap.mac-push</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>/bin/zsh</string>
+        <string>/Users/htlin/clipboard-snap-shortcut/scripts/push_maccy_clips.sh</string>
+        <string>--endpoint</string>
+        <string>https://clipboard-snap-htlin222.aws-ap-northeast-1.turso.io/v2/pipeline</string>
+        <string>--keychain-service</string>
+        <string>clipboard-snap-maccy-iguana</string>
+        <string>--source</string>
+        <string>maccy-iguana</string>
+    </array>
+    <key>StartInterval</key>
+    <integer>60</integer>
+    <key>RunAtLoad</key>
+    <true/>
+    <key>StandardOutPath</key>
+    <string>/tmp/clipboard-snap-mac-push.log</string>
+    <key>StandardErrorPath</key>
+    <string>/tmp/clipboard-snap-mac-push.err</string>
+</dict>
+</plist>
