@@ -167,6 +167,10 @@ store and inserts new plain-text items (`public.utf8-plain-text`) into Turso.
 It never writes back into Maccy's own database — that store is Core Data's
 private format and is not safe to write into from an external script.
 
+Before pushing, each clip is checked against [`config.toml`](config.toml)'s
+curated sensitive-data patterns; a match is skipped instead of pushed. See
+[Sensitive-Data Filter](#sensitive-data-filter) below.
+
 ### 1. Mint a per-Mac token (Keychain only, never a file)
 
 ```bash
@@ -282,6 +286,33 @@ binds it as a blob argument, and casts it back to text in Turso. User text is
 never interpolated into SQL or the raw JSON template. See [SECURITY.md](SECURITY.md)
 for private vulnerability reporting.
 
+### Sensitive-Data Filter
+
+[`config.toml`](config.toml) is a single curated list of regex patterns
+(credentials, cookies, hospital URLs, card numbers, wallet seed phrases, ...)
+that both delivery paths check before anything reaches Turso:
+
+- **`scripts/push_maccy_clips.sh`** reads `config.toml` at runtime and checks
+  it with `grep -Eiq` (POSIX ERE) before pushing each Maccy clip. A match
+  skips that item — its cursor still advances so it's never retried, and
+  only the matched pattern's `name` is logged, never the text itself.
+- **The iOS Shortcut** has the same patterns compiled into a single ICU
+  regular expression at *build* time (`make build`/`make shortcut`), run
+  through a native **Match Text** action before the Base64/network step. A
+  match shows a "Blocked" result and stops the Shortcut instead of sending.
+
+Because the Shortcut-side check is baked in rather than read at runtime,
+editing `config.toml` requires rebuilding and re-importing the Shortcut
+(`make shortcut`, then reinstall on the iPhone) for the change to take
+effect there — the Mac-side relay picks up edits immediately on its next
+run. Add new patterns by copying a `[[patterns]]` block in `config.toml`;
+see the comments there for the ERE-portability rules the regex must follow.
+
+Test any new or edited pattern before trusting it: run `make validate` (it
+rebuilds and checks the plist), and do one on-device test run of the
+rebuilt Shortcut with a disposable/known-fake secret to confirm it actually
+blocks before relying on it for a real credential.
+
 ## Development
 
 Python tooling is managed by [uv](https://docs.astral.sh/uv/). No manual virtual
@@ -334,6 +365,8 @@ request contract follows Turso's
 - `dist/Clipboard Snap.xml`: generated, reviewable plist source.
 - `skills/clipboard-snap-shortcut/`: generator, validator, references, and skill.
 - `skills/clipboard-snap-shortcut/assets/schema.sql`: Turso table schema.
+- `config.toml`: curated sensitive-data regex patterns shared by the relay
+  script and the Shortcut generator. See [Sensitive-Data Filter](#sensitive-data-filter).
 - `Makefile`: public build, private build, and database commands.
 
 ## Citation

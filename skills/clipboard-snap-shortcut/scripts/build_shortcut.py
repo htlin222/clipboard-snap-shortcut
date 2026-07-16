@@ -8,6 +8,7 @@ import json
 import plistlib
 import re
 import sys
+import tomllib
 import uuid
 from pathlib import Path
 from typing import Any
@@ -18,6 +19,27 @@ NAMESPACE = uuid.UUID("bbf3ad85-7955-4d33-8804-3b673a5fbd9e")
 DEFAULT_ENDPOINT = "https://DATABASE-ORG.turso.io/v2/pipeline"
 TOKEN_PLACEHOLDER = "PASTE_DATABASE_TOKEN_HERE"
 SQL = "INSERT INTO clips (text, source) VALUES (CAST(? AS TEXT), 'ios-shortcut')"
+DEFAULT_PATTERNS_FILE = Path(__file__).resolve().parents[3] / "config.toml"
+BLOCKED_MESSAGE = (
+    "Blocked: this text matched a sensitive-data pattern (config.toml) "
+    "and was not sent to Turso."
+)
+
+
+def load_sensitive_pattern(path: Path) -> str:
+    """Join config.toml's [[patterns]] regexes into one ICU alternation."""
+    with path.open("rb") as config_file:
+        config = tomllib.load(config_file)
+    patterns = config.get("patterns", [])
+    if not patterns:
+        raise SystemExit(f"no [[patterns]] entries found in {path}")
+    # `[[:space:]]`/`[^[:space:]]` are POSIX-class syntax written for
+    # grep -E; ICU supports it too, but `\s`/`\S` are the unambiguous forms
+    # on the Shortcuts side.
+    def to_icu(regex: str) -> str:
+        return regex.replace("[^[:space:]]", r"\S").replace("[[:space:]]", r"\s")
+
+    return "|".join(f"(?:{to_icu(entry['regex'])})" for entry in patterns)
 
 
 def stable_uuid(label: str) -> str:
@@ -175,7 +197,9 @@ def build_shortcut(
     name: str,
     endpoint: str = DEFAULT_ENDPOINT,
     token: str = TOKEN_PLACEHOLDER,
+    patterns_file: Path = DEFAULT_PATTERNS_FILE,
 ) -> dict[str, Any]:
+    sensitive_pattern = load_sensitive_pattern(patterns_file)
     credential_note = (
         "The Turso endpoint and insert-only database token are requested "
         "during import. Keep the configured shortcut private."
@@ -198,6 +222,8 @@ def build_shortcut(
     first_line_uuid = stable_uuid("first-text-line")
     input_condition_group_uuid = stable_uuid("input-condition")
     condition_group_uuid = stable_uuid("result-condition")
+    match_text_uuid = stable_uuid("sensitive-match-text")
+    sensitive_condition_group_uuid = stable_uuid("sensitive-condition")
 
     actions = [
         action(
@@ -260,6 +286,58 @@ def build_shortcut(
                 "WFCondition": 100,
                 "WFControlFlowMode": 0,
                 "WFInput": variable_condition_input(input_uuid, "Text"),
+            },
+        ),
+        action(
+            "is.workflow.actions.comment",
+            {
+                "WFCommentActionText": (
+                    "Block sending if the text matches a curated sensitive-data "
+                    "pattern from config.toml (credentials, cookies, hospital "
+                    "URLs, card numbers, wallet seed phrases, ...)."
+                )
+            },
+        ),
+        action(
+            "is.workflow.actions.text.match",
+            {
+                "UUID": match_text_uuid,
+                "CustomOutputName": "Text Matches",
+                "WFMatchTextCaseSensitive": False,
+                "WFMatchTextPattern": token_string(sensitive_pattern),
+                "text": token_attachment(input_uuid, "Text"),
+            },
+        ),
+        action(
+            "is.workflow.actions.conditional",
+            {
+                "GroupingIdentifier": sensitive_condition_group_uuid,
+                "WFCondition": 100,
+                "WFControlFlowMode": 0,
+                "WFInput": variable_condition_input(match_text_uuid, "Text Matches"),
+            },
+        ),
+        action(
+            "is.workflow.actions.showresult",
+            {"Text": token_string(BLOCKED_MESSAGE)},
+        ),
+        action(
+            "is.workflow.actions.exit",
+            {},
+        ),
+        action(
+            "is.workflow.actions.conditional",
+            {
+                "GroupingIdentifier": sensitive_condition_group_uuid,
+                "WFControlFlowMode": 1,
+            },
+        ),
+        action(
+            "is.workflow.actions.conditional",
+            {
+                "GroupingIdentifier": sensitive_condition_group_uuid,
+                "UUID": stable_uuid("end-sensitive-condition"),
+                "WFControlFlowMode": 2,
             },
         ),
         action(
@@ -516,6 +594,12 @@ def parse_args() -> argparse.Namespace:
         type=Path,
         default=Path("dist/Clipboard Snap.xml"),
     )
+    parser.add_argument(
+        "--patterns-file",
+        type=Path,
+        default=DEFAULT_PATTERNS_FILE,
+        help="config.toml providing the [[patterns]] sensitive-data regex list",
+    )
     return parser.parse_args()
 
 
@@ -532,7 +616,7 @@ def main() -> None:
     args.output.parent.mkdir(parents=True, exist_ok=True)
     with args.output.open("wb") as output_file:
         plistlib.dump(
-            build_shortcut(args.name, args.endpoint, token),
+            build_shortcut(args.name, args.endpoint, token, args.patterns_file),
             output_file,
             fmt=plistlib.FMT_XML,
             sort_keys=False,

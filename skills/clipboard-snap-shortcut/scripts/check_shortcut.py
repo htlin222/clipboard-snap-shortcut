@@ -21,6 +21,13 @@ EXPECTED_ACTIONS = [
     "is.workflow.actions.comment",
     "is.workflow.actions.conditional",
     "is.workflow.actions.comment",
+    "is.workflow.actions.text.match",
+    "is.workflow.actions.conditional",
+    "is.workflow.actions.showresult",
+    "is.workflow.actions.exit",
+    "is.workflow.actions.conditional",
+    "is.workflow.actions.conditional",
+    "is.workflow.actions.comment",
     "is.workflow.actions.base64encode",
     "is.workflow.actions.gettext",
     "is.workflow.actions.downloadurl",
@@ -45,6 +52,10 @@ SQL = "INSERT INTO clips (text, source) VALUES (CAST(? AS TEXT), 'ios-shortcut')
 ENDPOINT_PLACEHOLDER = "https://DATABASE-ORG.turso.io/v2/pipeline"
 TOKEN_PLACEHOLDER = "PASTE_DATABASE_TOKEN_HERE"
 PLACEHOLDER = "\ufffc"
+BLOCKED_MESSAGE = (
+    "Blocked: this text matched a sensitive-data pattern (config.toml) "
+    "and was not sent to Turso."
+)
 
 
 def fail(message: str) -> None:
@@ -156,6 +167,36 @@ def validate(
     if workflow.get("WFWorkflowIsDisabledOnLockScreen") is not True:
         fail("workflow must be disabled on the lock screen")
 
+    match_action = actions[8]["WFWorkflowActionParameters"]
+    if match_action.get("WFMatchTextCaseSensitive") is not False:
+        fail("sensitive-data match must be case-insensitive")
+    if not decode_token_string(match_action.get("WFMatchTextPattern", {})):
+        fail("sensitive-data match pattern must not be empty")
+    if match_action.get("text") != {
+        "Value": {
+            "OutputName": "Text",
+            "OutputUUID": actions[4]["WFWorkflowActionParameters"]["UUID"],
+            "Type": "ActionOutput",
+        },
+        "WFSerializationType": "WFTextTokenAttachment",
+    }:
+        fail("sensitive-data match must scan the saved text")
+
+    sensitive_condition = actions[9]["WFWorkflowActionParameters"]
+    if sensitive_condition.get("WFCondition") != 100:
+        fail("sensitive-data check must use Has Any Value")
+    if sensitive_condition.get("WFInput", {}).get("Variable", {}).get(
+        "Value", {}
+    ).get("OutputUUID") != actions[8]["WFWorkflowActionParameters"]["UUID"]:
+        fail("sensitive-data check must read the Match Text output")
+
+    if decode_token_string(
+        actions[10]["WFWorkflowActionParameters"]["Text"]
+    ) != BLOCKED_MESSAGE:
+        fail("blocked-send message differs from the contract")
+    if actions[11]["WFWorkflowActionParameters"] != {}:
+        fail("Exit Shortcut after a sensitive match must take no parameters")
+
     request_action = next(
         action
         for action in actions
@@ -185,7 +226,7 @@ def validate(
     if base64_parameters.get("WFBase64LineBreakMode") != "None":
         fail("Base64 output must not contain line breaks")
 
-    body_action = actions[9]["WFWorkflowActionParameters"]
+    body_action = actions[16]["WFWorkflowActionParameters"]
     body_text = decode_token_string(body_action["WFTextActionText"])
     try:
         payload = json.loads(body_text.replace("<dynamic>", "VHVyc28="))
@@ -221,7 +262,7 @@ def validate(
     if request_url != expected_request_url:
         fail("request URL differs from the configured credential mode")
 
-    split_action = actions[18]["WFWorkflowActionParameters"]
+    split_action = actions[25]["WFWorkflowActionParameters"]
     expected_text_input = {
         "Value": {
             "OutputName": "Text",
@@ -237,7 +278,7 @@ def validate(
     if "WFInput" in split_action:
         fail("Split Text must not include the legacy WFInput parameter")
 
-    first_line_action = actions[19]["WFWorkflowActionParameters"]
+    first_line_action = actions[26]["WFWorkflowActionParameters"]
     if first_line_action.get("WFItemSpecifier") != "First Item":
         fail("notification preview must select the first text line")
     if first_line_action.get("WFInput", {}).get("Value", {}).get(
@@ -245,7 +286,7 @@ def validate(
     ) != split_action.get("UUID"):
         fail("first-line action must use the Split Text output")
 
-    notification = actions[20]["WFWorkflowActionParameters"]
+    notification = actions[27]["WFWorkflowActionParameters"]
     if notification.get("WFNotificationActionTitle") != "Text saved to Turso.":
         fail("success notification title differs from the contract")
     if decode_token_string(notification["WFNotificationActionBody"]) != "<dynamic>...":

@@ -1,0 +1,105 @@
+# Sensitive-content filter for scripts/push_maccy_clips.sh.
+#
+# Every clipboard item is checked against each `regex` below before it is
+# pushed to the shared Turso `clips` table. A match causes that item to be
+# skipped — its cursor still advances, so it is never retried, but its text
+# is never sent to Turso and is never printed to the log (only `name` is).
+#
+# Matching is case-insensitive (`grep -Eiq`) and uses POSIX extended regular
+# expressions (ERE) only, on purpose: the plist runs this script through
+# whatever `grep` ships on each Mac, which cannot be assumed to be a PCRE
+# build. So: no `(?:...)`, no inline `(?i)`, no `\s`/`\d` — use `[[:space:]]`
+# and plain `(...)` groups instead. Test a new pattern with
+# `grep -Eiq -e '<regex>'` before adding it here.
+#
+# Format:
+#   [[patterns]]
+#   name  = "short-id"      # logged on skip; never the matched text itself
+#   regex = 'raw ERE'       # ALWAYS single-quoted: TOML single-quoted
+#                           # strings are literal, so a backslash reaches
+#                           # grep unescaped. A double-quoted TOML string
+#                           # would eat it first.
+#
+# To add a new pattern, copy a `[[patterns]]` block and edit `name`/`regex`.
+# To disable one without deleting it, comment out its `regex` line with `#`.
+
+[[patterns]]
+name = "REDACTED-hospital-domain"
+regex = 'REDACTED\.org'
+
+[[patterns]]
+name = "cookie-export-keys"
+regex = '(httpOnly|sameSite|hostOnly|storeId|expirationDate)"[[:space:]]*:'
+
+[[patterns]]
+name = "jwt"
+regex = 'eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+'
+
+[[patterns]]
+name = "generic-credential-kv"
+# Trailing `"?` also catches JSON-quoted keys, e.g. "password":"hunter2".
+regex = '(session|token|secret|password|passwd|api[_-]?key|apikey)"?[[:space:]]*[:=][[:space:]]*[^[:space:]]+'
+
+[[patterns]]
+name = "password-manager-csv-header"
+# CSV/JSON vault exports (Chrome, 1Password, Bitwarden) put these two
+# column names next to each other separated by a bare comma; ordinary
+# prose almost never does. Requiring the comma (not just proximity) is
+# what keeps this from tripping on a sentence like "reset your password,
+# then check your username".
+regex = '(username|login)[[:space:]]*,[[:space:]]*password|password[[:space:]]*,[[:space:]]*(username|login|url)'
+
+[[patterns]]
+name = "long-hex-hash"
+regex = '[a-f0-9]{40,}'
+
+[[patterns]]
+name = "medical-record-direct-link"
+regex = 'REDACTED|REDACTED'
+
+[[patterns]]
+name = "ssh-private-key"
+regex = '-----BEGIN (RSA |OPENSSH |EC |DSA |ENCRYPTED )?PRIVATE KEY-----'
+
+[[patterns]]
+name = "aws-access-key-id"
+regex = 'AKIA[0-9A-Z]{16}'
+
+[[patterns]]
+name = "aws-secret-key-kv"
+regex = 'aws_secret_access_key[[:space:]]*[:=][[:space:]]*[^[:space:]]+'
+
+[[patterns]]
+name = "google-api-key"
+regex = 'AIza[0-9A-Za-z_-]{35}'
+
+[[patterns]]
+name = "slack-token"
+regex = 'xox[baprs]-[0-9A-Za-z-]{10,}'
+
+[[patterns]]
+name = "github-token"
+regex = 'gh[pousr]_[A-Za-z0-9]{36,}'
+
+[[patterns]]
+name = "credit-card-16digit"
+# Visa (4), Mastercard (51-55), Discover (6011, 65xx), 16 digits total,
+# grouped by 4 with an optional space or dash between every group
+# (covers both raw "4111111111111111" and "4111 1111 1111 1111").
+regex = '(4[0-9]{3}|5[1-5][0-9]{2}|6011|65[0-9]{2})[ -]?[0-9]{4}[ -]?[0-9]{4}[ -]?[0-9]{4}'
+
+[[patterns]]
+name = "credit-card-amex"
+# Amex: prefix 34/37, 15 digits total, conventionally grouped 4-6-5.
+regex = '3[47][0-9]{2}[ -]?[0-9]{6}[ -]?[0-9]{5}'
+
+[[patterns]]
+name = "crypto-wallet-phrase-label"
+# Matches when a seed/recovery phrase is copied together with its own
+# label, which is how wallet apps show it. Deliberately does NOT try to
+# recognize a bare 12/24-word BIP39 phrase by word count alone — every
+# ordinary lowercase, punctuation-free sentence of the same length would
+# also match that, which is too noisy for a filter that runs silently.
+# If you want that stricter (noisier) net anyway, add e.g.:
+#   regex = '^([a-z]+[[:space:]]){11}[a-z]+$'   # exactly 12 words
+regex = '(seed phrase|recovery phrase|secret recovery phrase|mnemonic)'

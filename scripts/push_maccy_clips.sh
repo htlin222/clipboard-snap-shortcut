@@ -7,6 +7,7 @@ SOURCE="maccy-$(hostname -s)"
 STATE="$HOME/.local/state/clipboard-snap/$SOURCE.cursor"
 ENDPOINT=""
 KEYCHAIN_SERVICE="clipboard-snap-$SOURCE"
+CONFIG="${0:A:h:h}/config.toml"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -15,6 +16,7 @@ while [[ $# -gt 0 ]]; do
     --endpoint) ENDPOINT="$2"; shift 2 ;;
     --keychain-service) KEYCHAIN_SERVICE="$2"; shift 2 ;;
     --source) SOURCE="$2"; shift 2 ;;
+    --config) CONFIG="$2"; shift 2 ;;
     *) print -u2 "unknown argument: $1"; exit 2 ;;
   esac
 done
@@ -29,6 +31,50 @@ if ! pgrep -x Maccy >/dev/null 2>&1; then
   exit 0
 fi
 
+# Load the [[patterns]] regex list from config.toml into two parallel
+# arrays. Matching is done with `grep -Eiq` (see config.toml for why: no
+# PCRE features, this has to run under whatever grep ships on each Mac).
+pattern_names=()
+pattern_regexes=()
+if [[ -f "$CONFIG" ]]; then
+  while IFS=$'\t' read -r pname pregex; do
+    [[ -z "$pregex" ]] && continue
+    pattern_names+=("$pname")
+    pattern_regexes+=("$pregex")
+  done < <(awk -f - "$CONFIG" <<'AWK_EOF'
+BEGIN { name = "unnamed" }
+/^[[:space:]]*\[\[patterns\]\]/ { name = "unnamed" }
+/^[[:space:]]*name[[:space:]]*=/ {
+  line = $0
+  sub(/^[^=]*=[[:space:]]*/, "", line)
+  gsub(/^"/, "", line)
+  gsub(/"[[:space:]]*$/, "", line)
+  name = line
+}
+/^[[:space:]]*regex[[:space:]]*=/ {
+  line = $0
+  sub(/^[^=]*=[[:space:]]*/, "", line)
+  gsub(/^'/, "", line)
+  gsub(/'[[:space:]]*$/, "", line)
+  print name "\t" line
+}
+AWK_EOF
+  )
+else
+  print -u2 "warning: sensitive-pattern config not found at $CONFIG, pushing unfiltered"
+fi
+
+is_sensitive() {
+  local text="$1" i
+  for (( i = 1; i <= ${#pattern_regexes[@]}; i++ )); do
+    if print -r -- "$text" | grep -Eiq -e "${pattern_regexes[$i]}"; then
+      matched_pattern_name="${pattern_names[$i]}"
+      return 0
+    fi
+  done
+  return 1
+}
+
 TOKEN=$(security find-generic-password -a "$USER" -s "$KEYCHAIN_SERVICE" -w)
 
 mkdir -p "${STATE:h}"
@@ -42,11 +88,21 @@ SQL="SELECT i.Z_PK, hex(c.ZVALUE)
      ORDER BY i.Z_PK ASC;"
 
 pushed=0
+skipped=0
 cursor=$since
 while IFS='|' read -r pk hex_value; do
   [[ -z "$pk" ]] && continue
 
   if [[ -z "$hex_value" ]]; then
+    cursor=$pk
+    print "$cursor" > "$STATE"
+    continue
+  fi
+
+  text=$(print -r -- "$hex_value" | xxd -r -p)
+  if (( ${#pattern_regexes[@]} > 0 )) && is_sensitive "$text"; then
+    print "skipped item $pk: matched sensitive pattern '$matched_pattern_name'"
+    skipped=$((skipped + 1))
     cursor=$pk
     print "$cursor" > "$STATE"
     continue
@@ -71,4 +127,4 @@ while IFS='|' read -r pk hex_value; do
   print "$cursor" > "$STATE"
 done < <(sqlite3 -readonly -separator '|' "$DB" "$SQL")
 
-print "pushed $pushed new clip(s), cursor at $cursor"
+print "pushed $pushed new clip(s), skipped $skipped sensitive item(s), cursor at $cursor"
