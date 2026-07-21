@@ -32,3 +32,6 @@ dist/*
 
 # recent-clips triage runner artifacts
 .claude/skills/recent-clips/triage_cron.log
+
+# Private sensitive-content filter; ship config.toml.example instead.
+config.toml

@@ -1,4 +1,11 @@
-# Sensitive-content filter for scripts/push_maccy_clips.sh.
+# Sensitive-content filter for scripts/push_maccy_clips.sh — TEMPLATE.
+#
+# Copy this file to `config.toml` (which is git-ignored) and add any
+# org-specific patterns there — an internal domain, a record-URL parameter,
+# anything you never want leaving your machine. The two placeholder blocks
+# below (`org-internal-domain`, `record-direct-link`) show where those go;
+# replace them with your own. If `config.toml` is absent, the push script
+# falls back to this example so filtering is never silently skipped.
 #
 # Every clipboard item is checked against each `regex` below before it is
 # pushed to the shared Turso `clips` table. A match causes that item to be
@@ -36,9 +43,19 @@
 #                                   # ICU has real \b word boundaries so it
 #                                   # doesn't need the extract+filter split.
 
+# --- Replace these two with your own org-specific patterns in config.toml ---
+
 [[patterns]]
-name = "REDACTED-hospital-domain"
-regex = 'REDACTED\.org'
+name = "org-internal-domain"
+# e.g. your workplace/hospital domain, so internal links never leave the Mac.
+regex = 'yourorg\.example'
+
+[[patterns]]
+name = "record-direct-link"
+# e.g. the query params your record system puts in deep links.
+regex = 'record_id=|record_key='
+
+# --- Universal patterns below; keep as-is ---
 
 [[patterns]]
 name = "cookie-export-keys"
@@ -65,10 +82,6 @@ regex = '(username|login)[[:space:]]*,[[:space:]]*password|password[[:space:]]*,
 [[patterns]]
 name = "long-hex-hash"
 regex = '[a-f0-9]{40,}'
-
-[[patterns]]
-name = "medical-record-direct-link"
-regex = 'REDACTED|REDACTED'
 
 [[patterns]]
 name = "ssh-private-key"
@@ -126,7 +139,7 @@ regex = '(seed phrase|recovery phrase|secret recovery phrase|mnemonic)'
 
 [[count_patterns]]
 name = "bulk-8digit-numbers"
-# A chart number alone doesn't look like anything (it's just 8 digits),
+# A record number alone doesn't look like anything (it's just 8 digits),
 # but pasting a whole column of them — a spreadsheet export, a batch
 # lookup list — is itself a leak. `shell_token_regex` extracts every
 # maximal run of digits; `shell_match_regex` keeps only the ones that are

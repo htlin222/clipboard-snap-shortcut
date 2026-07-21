@@ -73,6 +73,7 @@ configured-shortcut: ## Build a private Shortcut with a fresh insert-only token.
 			--name "$(PRIVATE_NAME)" \
 			--endpoint "$(ENDPOINT)" \
 			--token-stdin \
+			--patterns-file "$(CURDIR)/config.toml" \
 			--output "$$temp_xml"
 	$(UV) run --frozen "$(SCRIPTS)/sign_shortcut.py" \
 		"$$temp_xml" \

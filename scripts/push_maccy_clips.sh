@@ -7,7 +7,12 @@ SOURCE="maccy-$(hostname -s)"
 STATE="$HOME/.local/state/clipboard-snap/$SOURCE.cursor"
 ENDPOINT=""
 KEYCHAIN_SERVICE="clipboard-snap-$SOURCE"
-CONFIG="${0:A:h:h}/config.toml"
+# The real config.toml is git-ignored (it can hold org-specific patterns like an
+# internal hospital domain); config.toml.example is the tracked, sanitized
+# fallback so a fresh clone still filters with the universal patterns instead of
+# pushing unfiltered.
+ROOT="${0:A:h:h}"
+CONFIG="$ROOT/config.toml"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -24,6 +29,12 @@ done
 if [[ -z "$ENDPOINT" ]]; then
   print -u2 "--endpoint is required"
   exit 2
+fi
+
+# Fall back to the tracked example when the private config is absent, so filtering
+# is never silently skipped on a fresh checkout.
+if [[ ! -f "$CONFIG" && -f "$ROOT/config.toml.example" ]]; then
+  CONFIG="$ROOT/config.toml.example"
 fi
 
 if ! pgrep -x Maccy >/dev/null 2>&1; then

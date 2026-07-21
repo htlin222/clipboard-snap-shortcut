@@ -167,8 +167,10 @@ store and inserts new plain-text items (`public.utf8-plain-text`) into Turso.
 It never writes back into Maccy's own database — that store is Core Data's
 private format and is not safe to write into from an external script.
 
-Before pushing, each clip is checked against [`config.toml`](config.toml)'s
-curated sensitive-data patterns; a match is skipped instead of pushed. See
+Before pushing, each clip is checked against a curated set of sensitive-data
+patterns; a match is skipped instead of pushed. The tracked template is
+[`config.toml.example`](config.toml.example); copy it to `config.toml` (which is
+git-ignored) to add your own org-specific patterns. See
 [Sensitive-Data Filter](#sensitive-data-filter) below.
 
 ### 1. Mint a per-Mac token (Keychain only, never a file)
@@ -288,9 +290,12 @@ for private vulnerability reporting.
 
 ### Sensitive-Data Filter
 
-[`config.toml`](config.toml) is a single curated list of regex patterns
-(credentials, cookies, hospital URLs, card numbers, wallet seed phrases, ...)
-that both delivery paths check before anything reaches Turso:
+`config.toml` is a single curated list of regex patterns (credentials,
+cookies, internal URLs, card numbers, wallet seed phrases, ...) that both
+delivery paths check before anything reaches Turso. The tracked, sanitized
+template is [`config.toml.example`](config.toml.example); the real `config.toml`
+is git-ignored so your org-specific patterns stay local, and the relay falls
+back to the example when it is absent:
 
 - **`scripts/push_maccy_clips.sh`** reads `config.toml` at runtime and checks
   it with `grep -Eiq` (POSIX ERE) before pushing each Maccy clip. A match
@@ -317,7 +322,7 @@ editing `config.toml` requires rebuilding and re-importing the Shortcut
 effect there — the Mac-side relay picks up edits immediately on its next
 run. Add new single-match patterns by copying a `[[patterns]]` block, or new
 threshold rules by copying a `[[count_patterns]]` block; see the comments in
-`config.toml` for the ERE-portability rules the regex must follow.
+`config.toml.example` for the ERE-portability rules the regex must follow.
 
 Test any new or edited pattern before trusting it: run `make validate` (it
 rebuilds and checks the plist), and do one on-device test run of the
@@ -376,8 +381,9 @@ request contract follows Turso's
 - `dist/Clipboard Snap.xml`: generated, reviewable plist source.
 - `skills/clipboard-snap-shortcut/`: generator, validator, references, and skill.
 - `skills/clipboard-snap-shortcut/assets/schema.sql`: Turso table schema.
-- `config.toml`: curated sensitive-data regex patterns shared by the relay
-  script and the Shortcut generator. See [Sensitive-Data Filter](#sensitive-data-filter).
+- `config.toml.example`: tracked, sanitized template of the sensitive-data
+  regex patterns shared by the relay script and the Shortcut generator; copy to
+  the git-ignored `config.toml`. See [Sensitive-Data Filter](#sensitive-data-filter).
 - `Makefile`: public build, private build, and database commands.
 
 ## Citation

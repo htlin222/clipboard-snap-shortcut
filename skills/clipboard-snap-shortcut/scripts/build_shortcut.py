@@ -19,11 +19,26 @@ NAMESPACE = uuid.UUID("bbf3ad85-7955-4d33-8804-3b673a5fbd9e")
 DEFAULT_ENDPOINT = "https://DATABASE-ORG.turso.io/v2/pipeline"
 TOKEN_PLACEHOLDER = "PASTE_DATABASE_TOKEN_HERE"
 SQL = "INSERT INTO clips (text, source) VALUES (CAST(? AS TEXT), 'ios-shortcut')"
-DEFAULT_PATTERNS_FILE = Path(__file__).resolve().parents[3] / "config.toml"
+# The public build reads the tracked, sanitized template; the real config.toml is
+# git-ignored so private patterns never reach dist/. A private build points
+# --patterns-file at config.toml explicitly (see the Makefile).
+REPO_ROOT = Path(__file__).resolve().parents[3]
+DEFAULT_PATTERNS_FILE = REPO_ROOT / "config.toml.example"
 BLOCKED_MESSAGE = (
     "Blocked: this text matched a sensitive-data pattern (config.toml) "
     "and was not sent to Turso."
 )
+
+
+def resolve_patterns_file(path: Path) -> Path:
+    """Fall back to the tracked example if a requested patterns file is absent."""
+    if path.is_file():
+        return path
+    fallback = REPO_ROOT / "config.toml.example"
+    if fallback.is_file():
+        print(f"note: {path} not found, using {fallback.name}", file=sys.stderr)
+        return fallback
+    raise SystemExit(f"patterns file not found: {path}")
 
 
 def to_icu(regex: str) -> str:
@@ -281,7 +296,9 @@ def build_shortcut(
     token: str = TOKEN_PLACEHOLDER,
     patterns_file: Path = DEFAULT_PATTERNS_FILE,
 ) -> dict[str, Any]:
-    sensitive_pattern, count_patterns = load_sensitive_config(patterns_file)
+    sensitive_pattern, count_patterns = load_sensitive_config(
+        resolve_patterns_file(patterns_file)
+    )
     credential_note = (
         "The Turso endpoint and insert-only database token are requested "
         "during import. Keep the configured shortcut private."

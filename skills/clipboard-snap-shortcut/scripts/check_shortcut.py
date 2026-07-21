@@ -12,7 +12,12 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import urlsplit
 
-PATTERNS_FILE = Path(__file__).resolve().parents[3] / "config.toml"
+# Validate against the same tracked template the public build reads. The real
+# config.toml is git-ignored; a private build is checked against its own source.
+_REPO_ROOT = Path(__file__).resolve().parents[3]
+PATTERNS_FILE = _REPO_ROOT / "config.toml.example"
+if not PATTERNS_FILE.is_file():
+    PATTERNS_FILE = _REPO_ROOT / "config.toml"
 
 
 EXPECTED_ACTIONS = [
