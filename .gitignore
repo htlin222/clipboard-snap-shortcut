@@ -29,3 +29,6 @@ private/
 dist/*
 !dist/Clipboard Snap.xml
 !dist/Clipboard Snap.shortcut
+
+# recent-clips triage runner artifacts
+.claude/skills/recent-clips/triage_cron.log

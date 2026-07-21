@@ -1,0 +1,20 @@
+You are triaging saved clipboard snippets. For EACH clip below, assign two tags.
+
+status — what to DO with it. Exactly one of:
+  draft   a finished piece ready to publish or send
+  todo    an action item, or something waiting on a reply
+  ref     a link or reference worth keeping
+  snippet a code or data fragment (patient data, logs, code, tables)
+  note    a distilled idea or study note worth keeping
+  scrap   a stray fragment, likely disposable (single words, ids, labels)
+
+topic — what it is ABOUT. Prefer one of these seed values:
+  medical  ai-project  writing  tooling  admin  misc
+If none fits, coin a new kebab-case topic (lowercase letters, digits, hyphens).
+
+Rules:
+- Output ONLY a raw JSON array, no prose, no markdown code fences.
+- One object per clip: {"id": <int>, "status": "<status>", "topic": "<topic>"}.
+- Use every clip's id exactly as given. Do not invent ids or drop clips.
+
+The clips follow as a JSON array of {"id","text"}.

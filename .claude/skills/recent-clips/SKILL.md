@@ -64,6 +64,26 @@ Then write the tags back:
 
 If every clip in the window is already tagged, say so and skip the write.
 
+### Automated hourly triage (launchd)
+
+The same tagging runs unattended once an hour via a launchd agent, so clips are
+usually already tagged by the time you summarise them. Each pass fetches the
+untagged clips from the last 2h, has Haiku (`claude -p --model`) classify them as
+a pure text→JSON step (no tools), and writes the result through `tag_clips.py`,
+which is the guardrail — a malformed answer is rejected, never written.
+
+Manage it from this skill's directory with make (macOS make 3.81, so the launchd
+logic lives in `scripts/launchd.sh`, not the recipes):
+
+```
+make install     # write the plist and load it (hourly + one run now)
+make status      # is it loaded? plus the last log lines
+make start/stop  # kick a run now / stop the current invocation
+make run         # one foreground pass, no launchd (make run WINDOW=6h)
+make logs        # follow scripts/../triage_cron.log
+make uninstall   # unload and remove the agent
+```
+
 ## Windows
 
 `$window` accepts `30m`, `6h`, `2d` — an integer plus `m`, `h`, or `d`. It
