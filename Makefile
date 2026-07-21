@@ -111,8 +111,12 @@ db-record: ## Show one complete record; usage: make db-record ID=123.
 		"SELECT id, created_at, source, text FROM clips WHERE id = $(ID);"
 
 mac-token: ## Mint a per-Mac insert-only token and store it in Keychain (never a file).
-	TOKEN=$$("$(TURSO)" db tokens create "$(DB)" -p clips:data_add --expiration "$(TOKEN_EXPIRATION)")
-	security add-generic-password -a "$$USER" -s "clipboard-snap-$(MAC_SOURCE)" -w "$$TOKEN" -U
+	@TOKEN=$$("$(TURSO)" db tokens create "$(DB)" -p clips:data_add --expiration "$(TOKEN_EXPIRATION)"); \
+	if [ -z "$$TOKEN" ]; then \
+		print -u2 "mac-token: turso returned an empty token; nothing stored"; \
+		exit 1; \
+	fi; \
+	security add-generic-password -a "$$USER" -s "clipboard-snap-$(MAC_SOURCE)" -w "$$TOKEN" -U; \
 	print "Stored in Keychain service: clipboard-snap-$(MAC_SOURCE)"
 
 mac-push: ## Push new plain-text Maccy clips into the shared clips table.
