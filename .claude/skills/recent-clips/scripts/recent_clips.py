@@ -28,9 +28,10 @@ PROJECT_ROOT = Path(
 # the renderer from wrapping the header across lines.
 QUERY = """
 SELECT json_group_array(json_object(
-    'id', id, 'created_at', created_at, 'source', source, 'text', text
+    'id', id, 'created_at', created_at, 'source', source, 'text', text,
+    'status', status, 'topic', topic
 )) AS j FROM (
-    SELECT id, created_at, source, text FROM clips
+    SELECT id, created_at, source, text, status, topic FROM clips
     WHERE created_at >= strftime('%Y-%m-%dT%H:%M:%fZ', 'now', ?)
     ORDER BY created_at DESC LIMIT ?
 );
@@ -137,10 +138,21 @@ def render(clips: list[dict], window: str, tz: ZoneInfo) -> str:
     """Format clips as readable records; JSON escapes would obscure the text."""
     if not clips:
         return f"No clips saved in the last {window}."
-    blocks = [f"{len(clips)} clip(s) in the last {window}, newest first:\n"]
+    untagged = sum(1 for clip in clips if not clip.get("status"))
+    header = f"{len(clips)} clip(s) in the last {window}, newest first"
+    if untagged:
+        header += f" ({untagged} untagged — triage these)"
+    blocks = [header + ":\n"]
     for clip in clips:
+        # Show any existing triage tags so the summariser only tags what is NULL.
+        tag = (
+            f"[{clip['status']}/{clip.get('topic') or '?'}]"
+            if clip.get("status")
+            else "[untagged]"
+        )
         blocks.append(
-            f"=== id={clip['id']} | {to_local(clip['created_at'], tz)} | {clip['source']} ===\n"
+            f"=== id={clip['id']} | {to_local(clip['created_at'], tz)} | "
+            f"{clip['source']} | {tag} ===\n"
             f"{clip['text']}\n"
         )
     return "\n".join(blocks)

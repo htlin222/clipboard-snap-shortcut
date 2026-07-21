@@ -3,7 +3,7 @@ name: recent-clips
 description: Fetches and summarizes clipboard text that the Clipboard Snap iOS Shortcut saved to the Turso database within a recent time window. Use when the user asks what they clipped, copied, or saved recently, asks to summarize recent clips, or runs /recent-clips.
 argument-hint: "[window] e.g. 6h, 30m, 2d"
 arguments: window
-allowed-tools: Bash(${CLAUDE_PROJECT_DIR}/.claude/skills/recent-clips/scripts/recent_clips.py *)
+allowed-tools: Bash(${CLAUDE_PROJECT_DIR}/.claude/skills/recent-clips/scripts/recent_clips.py *), Bash(${CLAUDE_PROJECT_DIR}/.claude/skills/recent-clips/scripts/tag_clips.py *)
 ---
 
 # Recent Clips
@@ -33,6 +33,36 @@ Summarize the clips above for the user, in the language they wrote to you in.
 
 If the output above says no clips were saved, say so plainly and offer a wider
 window. Do not pad the answer.
+
+## Triage (runs every time, after the summary)
+
+Each header line ends with the clip's current triage tag — `[status/topic]`, or
+`[untagged]` if it has never been triaged. After writing the summary, tag every
+`[untagged]` clip and write the tags back. Already-tagged clips are left alone;
+never re-tag them.
+
+Give each untagged clip two tags:
+
+- **status** — what to *do* with it. Exactly one of: `draft` (a finished piece
+  ready to publish or send), `todo` (an action item or something waiting on a
+  reply), `ref` (a link or reference worth keeping), `snippet` (a code or data
+  fragment), `note` (a distilled idea worth keeping), `scrap` (a stray fragment,
+  likely disposable).
+- **topic** — what it is *about*. Prefer a seed value: `medical`, `ai-project`,
+  `writing`, `tooling`, `admin`, `misc`. If none fits, coin a new kebab-case
+  topic rather than forcing `misc`.
+
+Then write the tags back:
+
+1. Build a JSON array of `{"id", "status", "topic"}`, one object per untagged
+   clip, and write it to a scratch file (use your scratchpad directory).
+2. Run `scripts/tag_clips.py --file <that file>`. It only updates rows that are
+   still `NULL`, validates every status against the fixed set, and flags any
+   topic beyond the seed set. Add `--dry-run` first if you want to preview.
+3. Tell the user how many clips were tagged and surface any brand-new topic the
+   script reported, so the taxonomy does not drift unnoticed.
+
+If every clip in the window is already tagged, say so and skip the write.
 
 ## Windows
 
