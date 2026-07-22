@@ -60,13 +60,14 @@ open: shortcut ## Open the public Shortcut in Apple Shortcuts.
 	open "$(SHORTCUT)"
 
 configured-shortcut: ## Build a private Shortcut with a fresh insert-only token.
-	if [[ "$(ENDPOINT)" == "https://DATABASE-ORG.turso.io/v2/pipeline" ]]; then
-		print -u2 "Set ENDPOINT to the database HTTP URL followed by /v2/pipeline"
-		exit 2
-	fi
-	mkdir -p "$(PRIVATE_DIR)"
-	temp_xml=$$(mktemp -t clipboard-snap-configured).xml
-	trap 'rm -f "$$temp_xml"' EXIT
+	@set -eu -o pipefail; \
+	if [[ "$(ENDPOINT)" == "https://DATABASE-ORG.turso.io/v2/pipeline" ]]; then \
+		print -u2 "Set ENDPOINT to the database HTTP URL followed by /v2/pipeline"; \
+		exit 2; \
+	fi; \
+	mkdir -p "$(PRIVATE_DIR)"; \
+	temp_xml=$$(mktemp -t clipboard-snap-configured).xml; \
+	trap 'rm -f "$$temp_xml"' EXIT; \
 	TURSO_NO_UPDATE=1 "$(TURSO)" db tokens create "$(DB)" \
 		-p clips:data_add --expiration "$(TOKEN_EXPIRATION)" | \
 		$(UV) run --frozen "$(SCRIPTS)/build_shortcut.py" \
@@ -74,17 +75,18 @@ configured-shortcut: ## Build a private Shortcut with a fresh insert-only token.
 			--endpoint "$(ENDPOINT)" \
 			--token-stdin \
 			--patterns-file "$(CURDIR)/config.toml" \
-			--output "$$temp_xml"
+			--output "$$temp_xml"; \
 	$(UV) run --frozen "$(SCRIPTS)/sign_shortcut.py" \
 		"$$temp_xml" \
 		--allow-configured-token \
-		--output "$(PRIVATE_SHORTCUT)"
+		--output "$(PRIVATE_SHORTCUT)"; \
 	print "Private artifact: $(PRIVATE_SHORTCUT)"
 
 db: ## Create the Turso database when needed and apply the schema.
-	if ! "$(TURSO)" db show "$(DB)" >/dev/null 2>&1; then
-		"$(TURSO)" db create "$(DB)"
-	fi
+	@set -eu -o pipefail; \
+	if ! "$(TURSO)" db show "$(DB)" >/dev/null 2>&1; then \
+		"$(TURSO)" db create "$(DB)"; \
+	fi; \
 	"$(TURSO)" db shell "$(DB)" < "$(SCHEMA)"
 
 db-url: ## Print the database HTTP URL; append /v2/pipeline in Shortcuts.
@@ -103,10 +105,11 @@ db-latest: ## Show the complete latest database record.
 		"SELECT id, created_at, source, text FROM clips ORDER BY id DESC LIMIT 1;"
 
 db-record: ## Show one complete record; usage: make db-record ID=123.
-	if [[ "$(ID)" != <-> ]]; then
-		print -u2 "ID must be a positive integer"
-		exit 2
-	fi
+	@set -eu -o pipefail; \
+	if [[ "$(ID)" != <-> ]]; then \
+		print -u2 "ID must be a positive integer"; \
+		exit 2; \
+	fi; \
 	"$(TURSO)" db shell "$(DB)" \
 		"SELECT id, created_at, source, text FROM clips WHERE id = $(ID);"
 
